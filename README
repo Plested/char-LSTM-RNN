@@ -1,7 +1,6 @@
 character-level LSTM RNN model based on LSTM model in http://arxiv.org/pdf/1308.0850.pdf
 and adapted from Vanilla RNN model written by Andrej Karpathy (@karpathy).
 
-Takes text file as input on line 75
 
 
-Hyperparameters including number of hidden units can be changed in lines 19-21
+Hyperparameters including number of hidden units and input and output txt files can be changed in lines 19-23

@@ -16,9 +16,11 @@ import pickle
 import string
 
 # hyperparameters
-h = 300 # size of hidden layer of neurons
+h = 100 # size of hidden layer of neurons
 seq_length = 25 # number of steps to unroll the RNN for
 learning_rate = .005
+inputFile = 'bigtxt.txt'
+outputText = 'RNNLSTMoutput100.txt'
 
 words = []
 haveWords = False
@@ -33,10 +35,12 @@ def getNGrams(data):
    Twograms = []
    i = 0
    w = []
+   allWords = []
    previous = False
    totalLen = 0
    for word in text:
         word = word.strip(string.punctuation)
+        allWords.append(word)
         if(haveWords):
             if(len(word) >0):
              if(word in words):
@@ -69,10 +73,11 @@ def getNGrams(data):
    theseWords = list(set(w))  
    print 'data has %d unique words.' %(len(theseWords))
    
-   return theseWords, Twograms
+   allWords = list(set(allWords))
+   return theseWords, Twograms, allWords
    
 # data I/O
-with open('bigtxt.txt', 'r') as f:
+with open(inputFile, 'r') as f:
     data = f.read()# should be simple plain text file
     chars = list(set(data))
     testSet = data[-len(data)/10:] #use last 1/10 of the data as text set
@@ -83,7 +88,7 @@ with open('bigtxt.txt', 'r') as f:
     ix_to_char = { i:ch for i,ch in enumerate(chars) }
     
 
-words, twoGrams = getNGrams(data)
+words, twoGrams, totalWords = getNGrams(data)
 haveWords = True 
 
 
@@ -251,7 +256,7 @@ def getStats(txt):
     """
     checks how many words and n-grams are in the sample text
     """    
-    sampleWords, sampleTwoGrams = getNGrams(txt)
+    sampleWords, sampleTwoGrams, allSampleWords = getNGrams(txt)
     #for word in sampleWords:
      #   if(not(word in words)):
       #      sampleWords.remove(word)
@@ -262,6 +267,8 @@ def getStats(txt):
     print 'no of sample 2-grams: %d' % (len(sampleTwoGrams))
     print 'precentage of sample words: %f' % ((float(len(sampleWords)))/len(words))
     print 'precentage of sample 2-grams: %f' % ((float(len(sampleTwoGrams)))/(len(twoGrams)))
+    
+    return len(sampleWords), len(sampleTwoGrams), len(allSampleWords)
     
 def getTestLoss():
     """
@@ -276,8 +283,8 @@ def getTestLoss():
     p += seq_length
     totalLoss = 0
     for n in range(100):
-        inputs = [char_to_ix[ch] for ch in data[p:p+seq_length]]
-        targets = [char_to_ix[ch] for ch in data[p+1:p+seq_length+1]]
+        inputs = [char_to_ix[ch] for ch in testSet[p:p+seq_length]]
+        targets = [char_to_ix[ch] for ch in testSet[p+1:p+seq_length+1]]
         loss, dWIF, dWIFc, dWC, dWO, dWOc, dWhy, dby, hprev, cprev = lossFun(inputs, targets, hprev, cprev)
         #print(loss)
         totalLoss += loss
@@ -289,7 +296,7 @@ n, p = 0, 0
 mWIF, mWIFc, mWC, mWO, mWOc, mWhy = np.zeros_like(WIF), np.zeros_like(WIFc), np.zeros_like(WC), np.zeros_like(WO), np.zeros_like(WOc), np.zeros_like(Why)
 mby = np.zeros_like(by) # memory variables for Adagrad
 smooth_loss = -np.log(1.0/vocab_size)*seq_length # loss at iteration 0
-#with open(('newModel118'), 'rb') as f1:
+#with open(('newModel300-69'), 'rb') as f1:
  #     model = pickle.load(f1)
 #j = 0
 #for weightVector, i in enumerate(model['WIF']):
@@ -319,19 +326,31 @@ while True:
   
   # sample from the model now and then
   if n % 10000 == 99:
-        sample_ix = sample(hprev, cprev, inputs[0], 1000)
+        sample_ix = sample(hprev, cprev, inputs[0], 10000)
         txt = ''.join(ix_to_char[ix] for ix in sample_ix)
         print( '----\n %s \n----' % (txt, ))
-        with open("RNNLSTMoutput300", 'wb') as f1:
+        with open("RNNLSTMoutput100", 'wb') as f1:
             pickle.dump(iterVloss,f1)
             pickle.dump( '----\n %s \n----' % (txt, ), f1)
+            
         
-        getStats(txt)
+        
+        noWords, noTwoGrams, totalNoSampleWords = getStats(txt)
+        
+        with open(outputText, 'w') as f2:
+           f2.write( 'no of sampleWords: %d' % (noWords))
+           f2.write('\n no of sample 2-grams: %d' % (noTwoGrams))
+           f2.write('\n precentage of sample words: %f' % ((float(noWords))/len(words)))
+           f2.write('\n precentage of sample 2-grams: %f' % ((float(noTwoGrams))/(len(twoGrams))))
+           f2.write('\n percentage of sample words that are real words: %f' % ((float(noWords))/(totalNoSampleWords)))
+           f2.write('\n number of iterations, training loss, test loss: \n')
+           f2.write(str(iterVloss))
+           f2.write('----\n %s \n----' % (txt, ))
         
     
   if n % 10000 == 999:
         model = {'WIF': WIF, 'WIFc': WIFc, 'WC': WC, 'WO': WO, 'WOc': WOc, 'Why': Why, 'by':by}
-        with open(('NewModels/newModel300-' + str(n/10000)), 'wb') as f:
+        with open(('NewModels/newModel100-' + str(n/10000)), 'wb') as f:
            pickle.dump(model, f)  
     
 
