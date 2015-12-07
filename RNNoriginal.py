@@ -16,12 +16,12 @@ import copy
 import time
 
 # hyperparameters
-hidden_size = 200 # size of hidden layer of neurons
+hidden_size = 510 # size of hidden layer of neurons
 seq_length = 25 # number of steps to unroll the RNN for
 learning_rate = 1e-1
-input_txt = 'bigtxt.txt'
-output_results = 'OriginalOutput/RNNoriginaloutputNoUpdatetest200-'
-output_model = 'OriginalModels/OriginalModelNoUpdatetest200-'
+input_txt = 'bigtxt.txt' # should be simple plain text file
+output_results = 'OriginalOutput/RNNoriginaloutputNoUpdatetest510-' #for saving the output
+output_model = 'OriginalModels/OriginalModelNoUpdatetest510-' #for saving the trained weights
 
 words = []
 haveWords = False
@@ -30,12 +30,12 @@ avgWordLen = 0
 
 def getNGrams(data):
    """
-   returns valid words and N-grams from a test set
+   returns valid words and al N-grams consisting of valid words from a test set
    """
    text = data.split()
    Ngrams = {}
    theseWords = []
-   #allWords = []
+  
    i = 0
    w = []
    length = 0
@@ -45,10 +45,10 @@ def getNGrams(data):
         word = word.strip(string.punctuation)
         if(haveWords):
             if(len(word) >0):
-             if(word in words):
+             if(word in words): #this is a valid word
                 w.append(word)
                 totalLen += len(word)
-                length += 1
+                length += 1 
                 theseWords.append(word)
                 
                 if length > 1: #collect N-grams
@@ -65,11 +65,10 @@ def getNGrams(data):
                 del theseWords[:]
                 
         else: #in training set no need to find N-grams
-            w.append(word)
-            #allWords.append(word)
-            totalLen += len(word)
-            
+            w.append(word)            
+            totalLen += len(word)            
         i += 1
+        
    #get unique N-grams       
    for key in Ngrams.keys():
        newLists = []
@@ -81,6 +80,8 @@ def getNGrams(data):
    if(len(w)>0):
        avgWordLen = ((float(totalLen))/len(w))   
        print('average word length: %f' % (avgWordLen))
+   else:
+       avgWordLen = 0
    
    #get unique words
    theseWords = list(set(w))
@@ -93,7 +94,7 @@ def getNGrams(data):
 
 # data I/O
 with open(input_txt, 'r') as f:
-    data = f.read()# should be simple plain text file
+    data = f.read()
     chars = list(set(data))
     testSet = data[-len(data)/10:] #use last 1/10 of the data as text set
     data = data[:-len(data)/10]
@@ -155,7 +156,7 @@ def sample(n):
   sample a sequence of integers from the model 
   warm up on the test set, seed_ix is seed letter for first time step
   """
-  hprev = np.zeros((hidden_size,1)) #start from scratch
+  hprev = np.zeros((hidden_size,1)) #reset hidden state
   p = 0
   inputs = [char_to_ix[ch] for ch in testSet[p:p+seq_length]]
   targets = [char_to_ix[ch] for ch in testSet[p+1:p+seq_length+1]]
@@ -203,7 +204,7 @@ def getStats(txt):
     for startWord in sampleNGrams.keys():
         for Ngram in sampleNGrams[startWord]:
             n += 1
-            indicies = copy.copy(startIndicies[startWord])
+            indicies = copy.copy(startIndicies[startWord]) #check potential places where N-gram could start and remove indicies that don't match
             for i in xrange(1, len(Ngram)):
                 for index in indicies:
                     if(index+i)>=len(allWords):
@@ -211,21 +212,25 @@ def getStats(txt):
                     else:
                         if(not(allWords[index+i]==Ngram[i])):
                             indicies.remove(index)
-                if(len(indicies)<1):
+                if(len(indicies)<1): #if no more indicies to check then stop checking
                     break
-                if(i==(len(Ngram)-1)):
+                if(i==(len(Ngram)-1)): #if we're at the end of the Ngram add it to the list of valid Ngrams
                     dataNgrams.append(Ngram)
     
-    no_Ngram_sizes = np.zeros((20))               
+    #count number of Ngrams and length in characters of Ngrams of different sizes
+    no_Ngram_sizes = np.zeros((20,2))               
     i = 0
     for Ngram in dataNgrams:
-        no_Ngram_sizes[len(Ngram)] += 1
+        no_Ngram_sizes[len(Ngram),0] += 1
+        no_char = 0
+        for word in Ngram:
+            no_char += len(word)
+        no_Ngram_sizes[len(Ngram), 1] += no_char
         if(len(Ngram)>i):
             i = len(Ngram)
     t1 = time.clock() - t0
     print(str(t1))
-            
-            
+                        
     print 'no of sampleWords: %d' % (len(sampleWords))
     print 'no of sample N-grams: %d' % (n)
     print 'no of sample N-grams from data: %d' % (len(dataNgrams))
@@ -243,7 +248,13 @@ def getStats(txt):
     return stats
     
 def getTestLoss():
-    hprev = np.zeros((hidden_size,1)) #start from scratch
+    """
+    Calculates the test loss based on the training set. 
+    Lazily reuses lossFun and just ignores the derivates returned. 
+    Obviously this could be sped up by not calculating derivates everytime
+    but it's only a small amount of the total training time.
+    """
+    hprev = np.zeros((hidden_size,1)) #reset hidden state
     p = 0
     inputs = [char_to_ix[ch] for ch in testSet[p:p+seq_length]]
     targets = [char_to_ix[ch] for ch in testSet[p+1:p+seq_length+1]]
@@ -253,7 +264,7 @@ def getTestLoss():
     for n in range(100):
         inputs = [char_to_ix[ch] for ch in testSet[p:p+seq_length]] #characters from test set
         targets = [char_to_ix[ch] for ch in testSet[p+1:p+seq_length+1]]
-        loss, dWxh, dWhh, dWhy, dbh, dby, hprev = lossFun(inputs, targets, hprev) #calculate loss on inputs from test set
+        loss, dWxh, dWhh, dWhy, dbh, dby, hprev = lossFun(inputs, targets, hprev) #calculate loss on inputs and targets from test set
         totalLoss += loss
         p += seq_length
     avgLoss = totalLoss/100
@@ -265,7 +276,7 @@ allStats.append(avgWordLen)
 n, p = 0, 0
 mWxh, mWhh, mWhy = np.zeros_like(Wxh), np.zeros_like(Whh), np.zeros_like(Why)
 mbh, mby = np.zeros_like(bh), np.zeros_like(by) # memory variables for Adagrad
-smooth_loss = -np.log(1.0/vocab_size)*seq_length # loss at iteration 0
+#smooth_loss = -np.log(1.0/vocab_size)*seq_length # loss at iteration 0
 total_loss = 0
 
 while True:
@@ -283,7 +294,7 @@ while True:
         stats = getStats(txt)
         stats.insert(0, n)
         allStats.append(stats)
-        if n % 10000 == 9000:
+        if n % 10000 == 9000: #save both stats and weights every 10,000 iterations. Creates a new file every time so all is not lost if the pickling process is interupted.
             with open((output_results+ str(n/10000)), 'wb') as f1:
                 pickle.dump(iterVloss, f1)
                 pickle.dump(allStats, f1)
@@ -296,7 +307,7 @@ while True:
   # forward seq_length characters through the net and fetch gradient
   loss, dWxh, dWhh, dWhy, dbh, dby, hprev = lossFun(inputs, targets, hprev)
   total_loss += loss
-  smooth_loss = smooth_loss * 0.999 + loss * 0.001
+  #smooth_loss = smooth_loss * 0.999 + loss * 0.001
   if n % 1000 == 0: 
       if(n>0):
           loss = total_loss/1000
